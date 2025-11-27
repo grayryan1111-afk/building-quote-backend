@@ -21,7 +21,17 @@ db.exec(CREATE TABLE IF NOT EXISTS quotes ( id TEXT PRIMARY KEY, address TEXT, h
 
 const [result] = await visionClient.objectLocalization(imagePath); const objects = result.localizedObjectAnnotations || [];
 
-const windows = objects.filter(o => o.name.toLowerCase().includes("window")); return windows.length; }
+const windows = {
+  "name": "clearview-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+} => o.name.toLowerCase().includes("window")); return windows.length; }
 
 // ========================== // API: Upload building photo and detect windows // ========================== app.post("/analyze", upload.single("photo"), async (req, res) => { try { const file = req.file; if (!file) return res.status(400).json({ error: "No file uploaded" });
 
