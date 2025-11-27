@@ -1,7 +1,143 @@
-<!DOCTYPE html>
-<html>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+// index.js
+const express = require("express");
+const app = express();
+
+// Allow JSON body
+app.use(express.json());
+
+// Simple CORS so your frontend on Render can talk to this
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept"
+  );
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// ---- SERVICE DEFINITIONS ----
+// You can change these prices any time.
+const SERVICES = [
+  {
+    id: "window_exterior",
+    label: "Window Cleaning - Exterior Only",
+    unit: "pane",          // charged per window pane
+    baseRate: 4.0          // $4 per pane
+  },
+  {
+    id: "window_inout",
+    label: "Window Cleaning - Inside & Outside",
+    unit: "pane",
+    baseRate: 6.0
+  },
+  {
+    id: "gutter_clean",
+    label: "Gutter Cleaning",
+    unit: "linear_ft",     // per linear foot of gutter
+    baseRate: 1.5
+  },
+  {
+    id: "roof_clean",
+    label: "Roof Cleaning / Moss Removal",
+    unit: "sq_ft",         // per square foot of roof
+    baseRate: 0.70
+  },
+  {
+    id: "pressure_drive",
+    label: "Pressure Washing - Driveway / Walkways",
+    unit: "sq_ft",
+    baseRate: 0.35
+  },
+  {
+    id: "house_wash",
+    label: "House Wash / Siding",
+    unit: "sq_ft",
+    baseRate: 0.45
+  }
+];
+
+// Helper to find a service by id
+function findService(id) {
+  return SERVICES.find((s) => s.id === id);
+}
+
+// ---- ROUTES ----
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
+
+// Get list of services + base pricing
+app.get("/services", (req, res) => {
+  res.json(SERVICES);
+});
+
+// Create a quote for ONE service
+// POST /quotes
+// Body example:
+// { "serviceId": "pressure_drive", "units": 800, "notes": "2 car driveway" }
+app.post("/quotes", (req, res) => {
+  try {
+    const { serviceId, units, notes } = req.body || {};
+
+    if (!serviceId || typeof units !== "number") {
+      return res.status(400).json({
+        message: "serviceId and numeric units are required"
+      });
+    }
+
+    const svc = findService(serviceId);
+    if (!svc) {
+      return res.status(400).json({ message: "Unknown serviceId" });
+    }
+
+    const base = svc.baseRate * units;
+
+    // Simple extras – you can tweak this:
+    // e.g. minimum charge of $120 and 5% “difficulty buffer”
+    const minCharge = 120;
+    const difficultyBuffer = base * 0.05;
+    const subtotal = Math.max(base + difficultyBuffer, minCharge);
+
+    // You can change your tax rate here if you want
+    const taxRate = 0.05; // 5% GST for example
+    const tax = subtotal * taxRate;
+    const total = subtotal + tax;
+
+    return res.json({
+      serviceId,
+      serviceName: svc.label,
+      units,
+      unitLabel: svc.unit,
+      baseRate: svc.baseRate,
+      notes: notes || null,
+      currency: "CAD",
+      subtotal: Number(subtotal.toFixed(2)),
+      tax: Number(tax.toFixed(2)),
+      total: Number(total.toFixed(2))
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error generating quote" });
+  }
+});
+
+// Fallback route
+app.get("/", (req, res) => {
+  res.json({
+    message: "Clearview quoting backend online",
+    servicesEndpoint: "/services",
+    quoteEndpoint: "/quotes"
+  });
+});
+
+// Start server (Render uses PORT env var)
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
+});
